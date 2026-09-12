@@ -54,13 +54,15 @@ extract_geometric_features <- function(buildings_sf,
   perimeter_area_ratio <- perimeter / sqrt(area)
   shape_index <- perimeter / (2 * sqrt(pi * area))
 
+  geom_list <- sf::st_geometry(buildings_sf)
+
   bbox_features <- list()
   if (use_parallel) {
     progressr::with_progress({
       p <- progressr::progressor(steps = nrow(buildings_sf))
       bbox_features <- future.apply::future_lapply(seq_len(nrow(buildings_sf)), function(i) {
         p()
-        geom <- buildings_sf$geometry[i]
+        geom <- geom_list[[i]]
         bbox <- sf::st_bbox(geom)
         width <- bbox["xmax"] - bbox["xmin"]
         height <- bbox["ymax"] - bbox["ymin"]
@@ -78,7 +80,7 @@ extract_geometric_features <- function(buildings_sf,
     })
   } else {
     bbox_features <- lapply(seq_len(nrow(buildings_sf)), function(i) {
-      geom <- buildings_sf$geometry[i]
+      geom <- geom_list[[i]]
       bbox <- sf::st_bbox(geom)
       width <- bbox["xmax"] - bbox["xmin"]
       height <- bbox["ymax"] - bbox["ymin"]
@@ -105,23 +107,13 @@ extract_geometric_features <- function(buildings_sf,
   vertices_per_area <- numeric(nrow(buildings_sf))
 
   for (i in seq_len(nrow(buildings_sf))) {
-    geom <- buildings_sf$geometry[i]
+    geom <- geom_list[[i]]
     geom_class <- class(geom)[2]
 
     if (geom_class == "MULTIPOLYGON") {
-      geom_parts <- geom
-      num_parts[i] <- length(geom_parts)
-      num_holes[i] <- sum(vapply(geom_parts, function(poly) length(poly) - 1L, integer(1)))
-    } else {
-      geom_parts <- geom
-      num_parts[i] <- 1L
-      num_holes[i] <- length(geom_parts) - 1L
-    }
+      num_parts[i] <- length(geom)
+      num_holes[i] <- sum(vapply(geom, function(poly) length(poly) - 1L, integer(1)))
 
-    has_hole[i] <- num_holes[i] > 0L
-
-    # count vertices via the nested coordinate matrices
-    if (geom_class == "MULTIPOLYGON") {
       vertex_count <- 0L
       for (p in seq_along(geom)) {
         rings <- geom[[p]]
@@ -130,6 +122,9 @@ extract_geometric_features <- function(buildings_sf,
         }
       }
     } else {
+      num_parts[i] <- 1L
+      num_holes[i] <- length(geom) - 1L
+
       vertex_count <- 0L
       rings <- geom
       for (r in seq_along(rings)) {
@@ -137,6 +132,7 @@ extract_geometric_features <- function(buildings_sf,
       }
     }
 
+    has_hole[i] <- num_holes[i] > 0L
     num_vertices[i] <- vertex_count
     vertices_per_area[i] <- vertex_count / sqrt(area[i])
   }
@@ -148,7 +144,7 @@ extract_geometric_features <- function(buildings_sf,
       p <- progressr::progressor(steps = nrow(buildings_sf))
       convexity_features <- future.apply::future_lapply(seq_len(nrow(buildings_sf)), function(i) {
         p()
-        geom <- buildings_sf$geometry[i]
+        geom <- geom_list[[i]]
         area_i <- as.numeric(sf::st_area(geom))
         hull <- sf::st_convex_hull(geom)
         hull_area <- as.numeric(sf::st_area(hull))
@@ -165,7 +161,7 @@ extract_geometric_features <- function(buildings_sf,
     })
   } else {
     convexity_features <- lapply(seq_len(nrow(buildings_sf)), function(i) {
-      geom <- buildings_sf$geometry[i]
+      geom <- geom_list[[i]]
       area_i <- as.numeric(sf::st_area(geom))
       hull <- sf::st_convex_hull(geom)
       hull_area <- as.numeric(sf::st_area(hull))
