@@ -1,0 +1,6 @@
+^\\.git$
+^\\.Rcheck$
+^\\.\\.Rcheck$
+^geomorphR\\.Rcheck$
+^geomorphR_.*\\.tar\\.gz$
+^\\.github$

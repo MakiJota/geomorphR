@@ -20,6 +20,19 @@
 #'   make_valid = TRUE
 #' )
 #' @export
+geomorphr_safe_st_perimeter <- function(geom) {
+  perimeter_value <- tryCatch(
+    as.numeric(sf::st_perimeter(geom)),
+    error = function(e) NA_real_
+  )
+
+  if (!is.na(perimeter_value[1])) {
+    return(perimeter_value)
+  }
+
+  as.numeric(sf::st_length(sf::st_boundary(geom)))
+}
+
 extract_geometric_features <- function(buildings_sf,
                                         verbose = TRUE,
                                         use_parallel = FALSE,
@@ -55,7 +68,7 @@ extract_geometric_features <- function(buildings_sf,
   }
 
   area <- as.numeric(sf::st_area(buildings_sf))
-  perimeter <- as.numeric(sf::st_perimeter(buildings_sf))
+  perimeter <- geomorphr_safe_st_perimeter(buildings_sf)
   centroid_xy <- sf::st_coordinates(sf::st_centroid(sf::st_geometry(buildings_sf)))
 
   # compactness, perimeter area ratio and shape index
@@ -157,7 +170,7 @@ extract_geometric_features <- function(buildings_sf,
         area_i <- as.numeric(sf::st_area(geom))
         hull <- sf::st_convex_hull(geom)
         hull_area <- as.numeric(sf::st_area(hull))
-        hull_perimeter <- as.numeric(sf::st_perimeter(hull))
+        hull_perimeter <- geomorphr_safe_st_perimeter(hull)
 
         data.frame(
           convex_area_m2 = hull_area,
@@ -174,7 +187,7 @@ extract_geometric_features <- function(buildings_sf,
       area_i <- as.numeric(sf::st_area(geom))
       hull <- sf::st_convex_hull(geom)
       hull_area <- as.numeric(sf::st_area(hull))
-      hull_perimeter <- as.numeric(sf::st_perimeter(hull))
+      hull_perimeter <- geomorphr_safe_st_perimeter(hull)
 
       data.frame(
         convex_area_m2 = hull_area,

@@ -5,7 +5,7 @@ Version: 0.1.0
 Authors@R: person("Jonathan", "Cohen", email = "cohen.jota@gmail.com", role = c("aut", "cre"))
 Author: Jonathan Cohen [aut, cre]
 Maintainer: Jonathan Cohen <cohen.jota@gmail.com>
-Description: A focused R package that extracts geometric and morphological descriptors from polygon and multipolygon building footprint geometries in sf objects using a standardized, transparent feature API.
+Description: A focused R package that extracts geometric and morphological descriptors from polygon and multi-polygon building footprint geometries in sf objects using a standardized, transparent feature API.
 License: MIT + file LICENSE
 URL: https://github.com/MakiJota/geomorphR
 BugReports: https://github.com/MakiJota/geomorphR/issues
@@ -15,5 +15,5 @@ Suggests: testthat (>= 3.0.0)
 Roxygen: list(markdown = TRUE)
 Config/roxygen2/version: 8.1.0
 NeedsCompilation: no
-Packaged: 2026-09-13 02:19:47 UTC; edgardo
-Built: R 4.5.1; ; 2026-09-13 02:20:01 UTC; windows
+Packaged: 2026-09-13 15:06:24 UTC; edgardo
+Built: R 4.5.1; ; 2026-09-13 15:06:38 UTC; windows
