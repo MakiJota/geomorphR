@@ -1,0 +1,18 @@
+Package: geomorphR
+Type: Package
+Title: Geometric Features for Building Footprints in Sf Objects
+Version: 0.1.0
+Authors@R: person("Jonathan", "Cohen", email = "cohen.jota@gmail.com", role = c("aut", "cre"))
+Author: Jonathan Cohen [aut, cre]
+Maintainer: Jonathan Cohen <cohen.jota@gmail.com>
+Description: A focused R package that extracts geometric and morphological descriptors from polygon and multipolygon building footprint geometries in sf objects using a standardized, transparent feature API.
+License: MIT + file LICENSE
+URL: https://github.com/MakiJota/geomorphR
+BugReports: https://github.com/MakiJota/geomorphR/issues
+Encoding: UTF-8
+Imports: sf, dplyr, future, future.apply, progressr
+Suggests: testthat (>= 3.0.0)
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.0
+NeedsCompilation: no
+Packaged: 2026-09-13 02:19:47 UTC; edgardo
