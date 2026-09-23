@@ -1,25 +1,3 @@
-#' Extract geometric and morphological descriptors from polygonal building footprints
-#'
-#' Computes a reproducible set of polygon geometry descriptors for an sf
-#' object containing POLYGON or MULTIPOLYGON geometries. The function
-#' appends new feature columns and preserves the original geometry.
-#'
-#' @param buildings_sf An sf object with POLYGON or MULTIPOLYGON geometries.
-#' @param verbose Logical; print progress messages when TRUE.
-#' @param use_parallel Logical; optional future-based parallel computation.
-#' @param n_cores Integer or NULL; number of workers used by future.apply.
-#' @param make_valid Logical; call sf::st_make_valid() before extraction.
-#' @return An sf object with appended geometry features.
-#' @examples
-#' geojson_path <- system.file("extdata", "central_gbg.geojson", package = "geomorphR")
-#' buildings <- sf::st_read(geojson_path)
-#' features <- extract_geometric_features(
-#'   buildings,
-#'   verbose = FALSE,
-#'   use_parallel = FALSE,
-#'   make_valid = TRUE
-#' )
-#' @export
 geomorphr_safe_st_perimeter <- function(geom) {
   perimeter_value <- tryCatch(
     as.numeric(sf::st_perimeter(geom)),
@@ -33,11 +11,106 @@ geomorphr_safe_st_perimeter <- function(geom) {
   as.numeric(sf::st_length(sf::st_boundary(geom)))
 }
 
+#' Validate source columns used by morphology metrics
+#'
+#' @param buildings_sf An sf object or data frame containing source columns.
+#' @param height_col Character scalar naming building height.
+#' @param floors_col Character scalar naming the number of floors/storeys.
+#' @param orientation_col Character scalar naming building orientation in degrees.
+#' @param gfa_col Character scalar naming gross floor area.
+#' @param plot_area_col Character scalar naming plot/parcel area.
+#' @return A data frame with one row per requested field and validation status.
+#' @export
+validate_morphology_columns <- function(buildings_sf,
+                                        height_col = NULL,
+                                        floors_col = NULL,
+                                        orientation_col = NULL,
+                                        gfa_col = NULL,
+                                        plot_area_col = NULL) {
+  if (!is.data.frame(buildings_sf)) {
+    stop("buildings_sf must be an sf object or data frame.", call. = FALSE)
+  }
+
+  requested <- c(
+    height_m = height_col,
+    floors = floors_col,
+    orientation_degrees = orientation_col,
+    gfa_m2 = gfa_col,
+    plot_area_m2 = plot_area_col
+  )
+  requested <- requested[!vapply(requested, is.null, logical(1))]
+
+  if (!length(requested)) {
+    return(data.frame(
+      metric = character(), column = character(), present = logical(),
+      numeric = logical(), missing_values = integer(), usable = logical(),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  data.frame(
+    metric = names(requested),
+    column = unname(requested),
+    present = unname(requested) %in% names(buildings_sf),
+    numeric = vapply(unname(requested), function(column) {
+      column %in% names(buildings_sf) && is.numeric(buildings_sf[[column]])
+    }, logical(1)),
+    missing_values = vapply(unname(requested), function(column) {
+      if (!column %in% names(buildings_sf)) return(NA_integer_)
+      sum(is.na(buildings_sf[[column]]))
+    }, integer(1)),
+    usable = vapply(unname(requested), function(column) {
+      column %in% names(buildings_sf) && is.numeric(buildings_sf[[column]]) &&
+        any(!is.na(buildings_sf[[column]]))
+    }, logical(1)),
+    stringsAsFactors = FALSE
+  )
+}
+
+geomorphr_orientation <- function(geom) {
+  rectangle <- sf::st_minimum_rotated_rectangle(geom)
+  coordinates <- sf::st_coordinates(rectangle)
+  if (nrow(coordinates) < 2L) return(NA_real_)
+
+  if (nrow(coordinates) > 1L && all(coordinates[1, 1:2] == coordinates[nrow(coordinates), 1:2])) {
+    coordinates <- coordinates[-nrow(coordinates), , drop = FALSE]
+  }
+  edges <- coordinates[, 1:2, drop = FALSE]
+  next_edges <- coordinates[c(2:nrow(coordinates), 1), 1:2, drop = FALSE]
+  lengths <- sqrt(rowSums((next_edges - edges)^2))
+  edge <- which.max(lengths)
+  angle <- atan2(next_edges[edge, 2] - edges[edge, 2],
+                 next_edges[edge, 1] - edges[edge, 1]) * 180 / pi
+  angle %% 180
+}
+
+#' Extract geometric and morphological descriptors from polygonal building footprints
+#'
+#' Computes footprint descriptors and optional building morphology metrics for
+#' an sf object containing POLYGON or MULTIPOLYGON geometries.
+#'
+#' @param buildings_sf An sf object with POLYGON or MULTIPOLYGON geometries.
+#' @param verbose Logical; print progress messages when TRUE.
+#' @param use_parallel Logical; optional future-based parallel computation.
+#' @param n_cores Integer or NULL; number of workers used by future.apply.
+#' @param make_valid Logical; call sf::st_make_valid() before extraction.
+#' @param height_col Character scalar naming building height in source units.
+#' @param floors_col Character scalar naming the number of floors/storeys.
+#' @param orientation_col Optional character scalar naming building orientation in degrees.
+#' @param gfa_col Optional character scalar naming gross floor area.
+#' @param plot_area_col Optional character scalar naming plot/parcel area.
+#' @return An sf object with appended geometry and morphology features.
+#' @export
 extract_geometric_features <- function(buildings_sf,
                                         verbose = TRUE,
                                         use_parallel = FALSE,
                                         n_cores = NULL,
-                                        make_valid = TRUE) {
+                                        make_valid = TRUE,
+                                        height_col = NULL,
+                                        floors_col = NULL,
+                                        orientation_col = NULL,
+                                        gfa_col = NULL,
+                                        plot_area_col = NULL) {
   if (!inherits(buildings_sf, "sf")) {
     stop("buildings_sf must be an sf object.", call. = FALSE)
   }
@@ -57,6 +130,23 @@ extract_geometric_features <- function(buildings_sf,
 
   if (make_valid) {
     buildings_sf <- sf::st_make_valid(buildings_sf)
+  }
+
+  column_report <- validate_morphology_columns(
+    buildings_sf,
+    height_col = height_col,
+    floors_col = floors_col,
+    orientation_col = orientation_col,
+    gfa_col = gfa_col,
+    plot_area_col = plot_area_col
+  )
+  invalid_columns <- column_report$metric[!column_report$usable]
+  if (length(invalid_columns)) {
+    stop(
+      "Requested morphology columns must exist, be numeric, and contain at least one non-missing value: ",
+      paste(invalid_columns, collapse = ", "),
+      call. = FALSE
+    )
   }
 
   if (use_parallel) {
@@ -229,6 +319,38 @@ extract_geometric_features <- function(buildings_sf,
     geometric_complexity_score = (num_vertices / 10) * (1 / compactness) * (1 + num_holes),
     stringsAsFactors = FALSE
   )
+
+  feature_frame$orientation_degrees <- vapply(geom_list, geomorphr_orientation, numeric(1))
+  if (!is.null(orientation_col)) {
+    feature_frame$orientation_degrees <- as.numeric(buildings_sf[[orientation_col]]) %% 180
+  }
+  if (!is.null(height_col)) {
+    height <- as.numeric(buildings_sf[[height_col]])
+    if (!"height_m" %in% names(buildings_sf)) feature_frame$height_m <- height
+    feature_frame$volume_m3 <- height * area
+    feature_frame$height_to_width <- height / pmax(feature_frame$bbox_width, .Machine$double.eps)
+  }
+  if (!is.null(floors_col)) {
+    floors <- as.numeric(buildings_sf[[floors_col]])
+    if (!"floors" %in% names(buildings_sf)) feature_frame$floors <- floors
+    if (!is.null(height_col)) feature_frame$floor_height_m <- height / floors
+  }
+  if (!is.null(gfa_col) || !is.null(floors_col)) {
+    gfa <- if (!is.null(gfa_col)) {
+      as.numeric(buildings_sf[[gfa_col]])
+    } else {
+      area * as.numeric(buildings_sf[[floors_col]])
+    }
+    if (!"gfa_m2" %in% names(buildings_sf)) feature_frame$gfa_m2 <- gfa
+  }
+  if (!is.null(plot_area_col)) {
+    plot_area <- as.numeric(buildings_sf[[plot_area_col]])
+    if (!"plot_area_m2" %in% names(buildings_sf)) feature_frame$plot_area_m2 <- plot_area
+    feature_frame$coverage_ratio <- area / plot_area
+    if (!is.null(gfa_col) || !is.null(floors_col)) {
+      feature_frame$fsi <- gfa / plot_area
+    }
+  }
 
   buildings_sf <- dplyr::bind_cols(buildings_sf, feature_frame)
 

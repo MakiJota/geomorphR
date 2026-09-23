@@ -9,7 +9,12 @@ extract_geometric_features(
   verbose = TRUE,
   use_parallel = FALSE,
   n_cores = NULL,
-  make_valid = TRUE
+  make_valid = TRUE,
+  height_col = NULL,
+  floors_col = NULL,
+  orientation_col = NULL,
+  gfa_col = NULL,
+  plot_area_col = NULL
 )
 }
 \arguments{
@@ -22,22 +27,21 @@ extract_geometric_features(
 \item{n_cores}{Integer or NULL; number of workers used by future.apply.}
 
 \item{make_valid}{Logical; call sf::st_make_valid() before extraction.}
+
+\item{height_col}{Character scalar naming building height in source units.}
+
+\item{floors_col}{Character scalar naming the number of floors/storeys.}
+
+\item{orientation_col}{Optional character scalar naming building orientation in degrees.}
+
+\item{gfa_col}{Optional character scalar naming gross floor area.}
+
+\item{plot_area_col}{Optional character scalar naming plot/parcel area.}
 }
 \value{
-An sf object with appended geometry features.
+An sf object with appended geometry and morphology features.
 }
 \description{
-Computes a reproducible set of polygon geometry descriptors for an sf
-object containing POLYGON or MULTIPOLYGON geometries. The function
-appends new feature columns and preserves the original geometry.
-}
-\examples{
-geojson_path <- system.file("extdata", "central_gbg.geojson", package = "geomorphR")
-buildings <- sf::st_read(geojson_path)
-features <- extract_geometric_features(
-  buildings,
-  verbose = FALSE,
-  use_parallel = FALSE,
-  make_valid = TRUE
-)
+Computes footprint descriptors and optional building morphology metrics for
+an sf object containing POLYGON or MULTIPOLYGON geometries.
 }

@@ -1,1 +1,2 @@
 export(extract_geometric_features)
+export(validate_morphology_columns)
