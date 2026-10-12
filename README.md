@@ -1,21 +1,27 @@
 # geomorphR
 
-A focused R package for extracting geometric and morphological features from polygon and multipolygon building footprints represented in `sf` objects.
+A focused R package for extracting geometric and morphological features and
+comparing changes in polygon and multipolygon building footprints using `sf`.
 
 ## Overview
 
-The objective is to provide a clean, transparent, reproducible API to compute raw geometric and morphology descriptors that can feed further spatial or machine-learning workflows.
+The package provides reproducible geometric descriptors for individual
+footprints and a temporal comparison workflow for identifying new construction
+and demolition. The resulting `sf` objects can be used in spatial analysis and
+downstream statistical or machine-learning workflows.
 
 ## Installation
 
-Install directly from GitHub with:
+Install the released package from CRAN:
 
 ```r
-if (!requireNamespace("remotes", quietly = TRUE)) {
-  install.packages("remotes")
-}
+install.packages("geomorphR")
+```
 
-remotes::install_github("YOUR_USERNAME/geomorphR")
+To install the latest development version from GitHub:
+
+```r
+remotes::install_github("MakiJota/geomorphR")
 ```
 
 ## Example
@@ -54,6 +60,68 @@ features <- extract_geometric_features(
 ```
 
 Use `validate_morphology_columns()` to inspect whether source fields exist and are numeric before extraction. Orientation is estimated from the minimum rotated rectangle unless an orientation column is supplied.
+
+## Comparing footprints across periods
+
+`compare_footprints()` compares polygon footprints from two spatial files using
+intersection-over-union (IoU). It returns new constructions, potential demolitions,
+and enriched input layers. Inputs may be Shapefiles, GeoPackages, or other formats
+supported by `sf`. Specify `layer1` and `layer2` when reading GeoPackages with
+multiple layers. An optional `boundary_path` clips both periods to a polygon
+boundary; differing input CRSs are transformed to the CRS of the earlier layer.
+
+```r
+example_dir <- system.file(
+  "extdata", "footprint_comparison",
+  package = "geomorphR"
+)
+historical_gpkg <- file.path(example_dir, "geopack", "historical.gpkg")
+boundary_shp <- file.path(example_dir, "boundary", "study_area.shp")
+
+comparison <- compare_footprints(
+  file1 = historical_gpkg,
+  file2 = historical_gpkg,
+  layer1 = "old",
+  layer2 = "new",
+  boundary_path = boundary_shp
+)
+
+new_buildings <- comparison$new_constructions
+demolished_buildings <- comparison$demolitions
+```
+
+The function returns its results as `sf` objects without writing files. Use
+`sf::st_write()` to save a result in a format and layer of your choice.
+Runnable examples for both the GeoPackage and Shapefile inputs are installed at
+`system.file("examples", "compare_footprints.R", package = "geomorphR")`.
+The input files are organized under
+`system.file("extdata", "footprint_comparison", package = "geomorphR")` in
+separate `geopack`, `shp`, and `boundary` folders.
+
+### Comparing threshold combinations
+
+`similarity_threshold` is the minimum IoU used to treat overlapping footprints
+as the same building. A lower value is more permissive; a value of `1` requires
+identical footprints for a match. `overlap_demolition_threshold` sets the
+percentage below which an identified demolition is marked as a potential
+demolition. Raising it can mark more demolitions as potential.
+
+This example runs the nine combinations of similarity thresholds `0.25`, `0.5`,
+and `1` with overlap thresholds `25`, `50`, and `100`, then writes the five
+result types for each run as named layers in one GeoPackage:
+
+```r
+source(system.file(
+  "examples", "compare_footprints.R",
+  package = "geomorphR"
+))
+```
+
+The example output has 45 layers: five result types for each of the nine
+threshold pairs. The bundled input files contain small synthetic polygon
+examples created for this package; they are intended to demonstrate the
+workflow, not to represent real city data. Generated comparison outputs are
+not bundled; run the example script to create them locally.
 
 ## Calculated properties
 

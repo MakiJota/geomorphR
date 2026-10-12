@@ -1,11 +1,21 @@
 Package: geomorphR
 Type: Package
-Title: Geometric Features for Building Footprints in Sf Objects
-Version: 0.1.0
+Title: Geometric Features and Footprint Comparison for Sf Objects
+Version: 0.2.0
 Authors@R: person("Jonathan", "Cohen", email = "cohen.jota@gmail.com", role = c("aut", "cre"))
 Author: Jonathan Cohen [aut, cre]
 Maintainer: Jonathan Cohen <cohen.jota@gmail.com>
-Description: Extracts reproducible geometric and urban-morphology descriptors from polygon and multipart polygon building footprints stored as sf objects. Methods include area, perimeter, compactness, shape, bounding-box, topology, convexity, and orientation measures, together with optional building-height, floor-count, gross-floor-area, floor-space-index, coverage, volume, and floor-height metrics derived from explicitly named attribute columns. The resulting sf objects preserve the source attributes and geometry for spatial analysis, visualization, and downstream statistical or machine-learning workflows, with optional future-based parallel processing for larger datasets.
+Description: Extracts reproducible geometric and urban-morphology descriptors from
+    polygon and multipart polygon building footprints stored as sf objects,
+    including area, perimeter, compactness, shape, topology, convexity, orientation,
+    and optional building-height and floor-area metrics. Compares polygon footprints
+    across periods using intersection-over-union to identify new constructions,
+    potential demolitions, and footprint changes. Supports vector file formats
+    readable by sf, including Shapefiles and GeoPackages with named layers, optional
+    boundary clipping, and reprojection to a common coordinate reference system.
+    Returned sf objects preserve source attributes and geometry for spatial analysis
+    and downstream workflows, with optional future-based parallel processing for
+    larger feature-extraction jobs.
 License: MIT + file LICENSE
 URL: https://github.com/MakiJota/geomorphR
 BugReports: https://github.com/MakiJota/geomorphR/issues

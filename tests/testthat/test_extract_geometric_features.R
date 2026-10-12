@@ -1,5 +1,4 @@
 library(testthat)
-library(sf)
 
 make_square <- function() {
   sf::st_sf(

@@ -5,3 +5,4 @@
 ^geomorphR\\.Rcheck$
 ^geomorphR_.*\\.tar\\.gz$
 ^\\.github$
+^to_add$
