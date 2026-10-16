@@ -1,0 +1,8 @@
+compare_footprints      Compare polygon footprints across two spatial
+                        files
+extract_geometric_features
+                        Extract geometric and morphological descriptors
+                        from polygonal building footprints
+validate_morphology_columns
+                        Validate source columns used by morphology
+                        metrics

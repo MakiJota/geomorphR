@@ -1,0 +1,14 @@
+Package: geomorphR 0.2.1
+Source archive: geomorphR_0.2.1.tar.gz (same directory)
+Check command: R CMD check --as-cran --no-manual
+Result: 0 errors, 0 warnings, 2 notes
+
+Notes:
+- The CRAN incoming check reports that 3 days have elapsed since the last
+  update. This is an incoming-submission timing note, not a package check
+  failure.
+- The check environment could not verify the current time while checking
+  source-file timestamps.
+
+All package installation, metadata, namespace, code, Rd, and test checks
+passed on Windows with R 4.5.1. The package has not been submitted to CRAN.

@@ -6,3 +6,5 @@
 ^geomorphR_.*\\.tar\\.gz$
 ^\\.github$
 ^to_add$
+^response$
+^CRAN_STATUS\.txt$

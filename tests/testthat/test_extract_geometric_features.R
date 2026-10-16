@@ -10,6 +10,22 @@ make_square <- function() {
   )
 }
 
+make_rotated_rectangle <- function(angle_degrees) {
+  angle <- angle_degrees * pi / 180
+  coordinates <- rbind(
+    c(-5, -2), c(5, -2), c(5, 2), c(-5, 2), c(-5, -2)
+  )
+  rotation <- matrix(
+    c(cos(angle), sin(angle), -sin(angle), cos(angle)),
+    nrow = 2
+  )
+  coordinates <- coordinates %*% rotation
+  sf::st_sf(
+    id = 1,
+    geometry = sf::st_sfc(sf::st_polygon(list(coordinates)), crs = 3857)
+  )
+}
+
 test_that("extract_geometric_features returns an sf object with requested columns", {
   x <- make_square()
   y <- extract_geometric_features(x, verbose = FALSE, use_parallel = FALSE, make_valid = TRUE)
@@ -34,6 +50,45 @@ test_that("square metric expectations are stable", {
   expect_equal(as.numeric(y$bbox_width), 10, tolerance = 1e-6)
   expect_equal(as.numeric(y$bbox_height), 10, tolerance = 1e-6)
   expect_equal(as.numeric(y$rectangularity), 1, tolerance = 1e-6)
+})
+
+test_that("elongation and rectangularity are invariant to map rotation", {
+  horizontal <- extract_geometric_features(
+    make_rotated_rectangle(0),
+    verbose = FALSE,
+    use_parallel = FALSE
+  )
+  diagonal <- extract_geometric_features(
+    make_rotated_rectangle(45),
+    verbose = FALSE,
+    use_parallel = FALSE
+  )
+
+  expect_equal(as.numeric(diagonal$elongation), 2.5, tolerance = 1e-6)
+  expect_equal(as.numeric(diagonal$rectangularity), 1, tolerance = 1e-6)
+  expect_equal(as.numeric(diagonal$aspect_ratio), 0.4, tolerance = 1e-6)
+  expect_equal(diagonal$elongation, horizontal$elongation, tolerance = 1e-6)
+  expect_equal(diagonal$rectangularity, horizontal$rectangularity, tolerance = 1e-6)
+  expect_equal(diagonal$bbox_width, horizontal$bbox_width, tolerance = 1e-6)
+  expect_equal(diagonal$bbox_height, horizontal$bbox_height, tolerance = 1e-6)
+})
+
+test_that("make_valid repairs invalid geometries before measuring", {
+  invalid <- sf::st_sf(
+    id = 1,
+    geometry = sf::st_sfc(
+      sf::st_polygon(list(rbind(
+        c(0, 0), c(2, 2), c(0, 2), c(2, 0), c(0, 0)
+      ))),
+      crs = 3857
+    )
+  )
+
+  expect_false(sf::st_is_valid(invalid))
+  repaired <- extract_geometric_features(invalid, verbose = FALSE, make_valid = TRUE)
+
+  expect_true(all(sf::st_is_valid(repaired)))
+  expect_equal(as.numeric(repaired$area_m2), 2, tolerance = 1e-6)
 })
 
 test_that("attribute-based morphology metrics are derived from explicit columns", {

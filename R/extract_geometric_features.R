@@ -67,21 +67,44 @@ validate_morphology_columns <- function(buildings_sf,
   )
 }
 
-geomorphr_orientation <- function(geom) {
-  rectangle <- sf::st_minimum_rotated_rectangle(geom)
-  coordinates <- sf::st_coordinates(rectangle)
-  if (nrow(coordinates) < 2L) return(NA_real_)
-
-  if (nrow(coordinates) > 1L && all(coordinates[1, 1:2] == coordinates[nrow(coordinates), 1:2])) {
+geomorphr_rotated_rectangle_features <- function(coordinates, geometry_area) {
+  if (nrow(coordinates) > 1L &&
+      all(coordinates[1, 1:2] == coordinates[nrow(coordinates), 1:2])) {
     coordinates <- coordinates[-nrow(coordinates), , drop = FALSE]
   }
+  if (nrow(coordinates) < 3L) {
+    return(c(
+      bbox_width = NA_real_,
+      bbox_height = NA_real_,
+      bbox_area = NA_real_,
+      elongation = NA_real_,
+      rectangularity = NA_real_,
+      aspect_ratio = NA_real_,
+      orientation_degrees = NA_real_
+    ))
+  }
+
   edges <- coordinates[, 1:2, drop = FALSE]
-  next_edges <- coordinates[c(2:nrow(coordinates), 1), 1:2, drop = FALSE]
+  next_edges <- coordinates[c(seq.int(2L, nrow(coordinates)), 1L), 1:2, drop = FALSE]
   lengths <- sqrt(rowSums((next_edges - edges)^2))
-  edge <- which.max(lengths)
-  angle <- atan2(next_edges[edge, 2] - edges[edge, 2],
-                 next_edges[edge, 1] - edges[edge, 1]) * 180 / pi
-  angle %% 180
+  width <- max(lengths)
+  height <- min(lengths)
+  area <- width * height
+  longest_edge <- which.max(lengths)
+  angle <- atan2(
+    next_edges[longest_edge, 2] - edges[longest_edge, 2],
+    next_edges[longest_edge, 1] - edges[longest_edge, 1]
+  ) * 180 / pi
+
+  c(
+    bbox_width = width,
+    bbox_height = height,
+    bbox_area = area,
+    elongation = if (height > 0) width / height else NA_real_,
+    rectangularity = if (area > 0) geometry_area / area else NA_real_,
+    aspect_ratio = if (width > 0) height / width else NA_real_,
+    orientation_degrees = angle %% 180
+  )
 }
 
 #' Extract geometric and morphological descriptors from polygonal building footprints
@@ -129,7 +152,12 @@ extract_geometric_features <- function(buildings_sf,
   }
 
   if (make_valid) {
-    buildings_sf <- sf::st_make_valid(buildings_sf)
+    validity <- sf::st_is_valid(buildings_sf)
+    invalid <- is.na(validity) | !validity
+    if (any(invalid)) {
+      repaired <- sf::st_make_valid(buildings_sf[invalid, ])
+      sf::st_geometry(buildings_sf)[invalid] <- sf::st_geometry(repaired)
+    }
   }
 
   column_report <- validate_morphology_columns(
@@ -168,48 +196,28 @@ extract_geometric_features <- function(buildings_sf,
 
   geom_list <- sf::st_geometry(buildings_sf)
 
-  bbox_features <- list()
-  if (use_parallel) {
-    progressr::with_progress({
-      p <- progressr::progressor(steps = nrow(buildings_sf))
-      bbox_features <- future.apply::future_lapply(seq_len(nrow(buildings_sf)), function(i) {
-        p()
-        geom <- geom_list[[i]]
-        bbox <- sf::st_bbox(geom)
-        width <- bbox["xmax"] - bbox["xmin"]
-        height <- bbox["ymax"] - bbox["ymin"]
-        area_bbox <- width * height
-
-        data.frame(
-          bbox_width = as.numeric(width),
-          bbox_height = as.numeric(height),
-          bbox_area = as.numeric(area_bbox),
-          elongation = as.numeric(max(width, height) / min(width, height)),
-          rectangularity = as.numeric(sf::st_area(geom) / area_bbox),
-          stringsAsFactors = FALSE
-        )
-      }, future.seed = TRUE)
-    })
-  } else {
-    bbox_features <- lapply(seq_len(nrow(buildings_sf)), function(i) {
-      geom <- geom_list[[i]]
-      bbox <- sf::st_bbox(geom)
-      width <- bbox["xmax"] - bbox["xmin"]
-      height <- bbox["ymax"] - bbox["ymin"]
-      area_bbox <- width * height
-
-      data.frame(
-        bbox_width = as.numeric(width),
-        bbox_height = as.numeric(height),
-        bbox_area = as.numeric(area_bbox),
-        elongation = as.numeric(max(width, height) / min(width, height)),
-        rectangularity = as.numeric(sf::st_area(geom) / area_bbox),
-        stringsAsFactors = FALSE
-      )
-    })
-  }
-
-  bbox_df <- dplyr::bind_rows(bbox_features)
+  rotated_rectangles <- sf::st_minimum_rotated_rectangle(geom_list)
+  rectangle_coordinates <- sf::st_coordinates(rotated_rectangles)
+  rectangle_groups <- split(
+    seq_len(nrow(rectangle_coordinates)),
+    factor(
+      rectangle_coordinates[, ncol(rectangle_coordinates)],
+      levels = seq_len(nrow(buildings_sf))
+    )
+  )
+  bbox_df <- as.data.frame(t(vapply(
+    seq_len(nrow(buildings_sf)),
+    function(i) {
+      rows <- rectangle_groups[[i]]
+      coordinates <- if (length(rows)) {
+        rectangle_coordinates[rows, 1:2, drop = FALSE]
+      } else {
+        matrix(numeric(), ncol = 2)
+      }
+      geomorphr_rotated_rectangle_features(coordinates, area[i])
+    },
+    numeric(7)
+  )))
 
   # topology descriptors
   has_hole <- logical(nrow(buildings_sf))
@@ -257,7 +265,7 @@ extract_geometric_features <- function(buildings_sf,
       convexity_features <- future.apply::future_lapply(seq_len(nrow(buildings_sf)), function(i) {
         p()
         geom <- geom_list[[i]]
-        area_i <- as.numeric(sf::st_area(geom))
+        area_i <- area[i]
         hull <- sf::st_convex_hull(geom)
         hull_area <- as.numeric(sf::st_area(hull))
         hull_perimeter <- geomorphr_safe_st_perimeter(hull)
@@ -271,25 +279,18 @@ extract_geometric_features <- function(buildings_sf,
         )
       }, future.seed = TRUE)
     })
+    convexity_df <- dplyr::bind_rows(convexity_features)
   } else {
-    convexity_features <- lapply(seq_len(nrow(buildings_sf)), function(i) {
-      geom <- geom_list[[i]]
-      area_i <- as.numeric(sf::st_area(geom))
-      hull <- sf::st_convex_hull(geom)
-      hull_area <- as.numeric(sf::st_area(hull))
-      hull_perimeter <- geomorphr_safe_st_perimeter(hull)
-
-      data.frame(
-        convex_area_m2 = hull_area,
-        convexity = area_i / hull_area,
-        equiv_radius_m = sqrt(area_i / pi),
-        convex_perimeter_m = hull_perimeter,
-        stringsAsFactors = FALSE
-      )
-    })
+    hulls <- sf::st_convex_hull(geom_list)
+    hull_area <- as.numeric(sf::st_area(hulls))
+    convexity_df <- data.frame(
+      convex_area_m2 = hull_area,
+      convexity = area / hull_area,
+      equiv_radius_m = sqrt(area / pi),
+      convex_perimeter_m = geomorphr_safe_st_perimeter(hulls),
+      stringsAsFactors = FALSE
+    )
   }
-
-  convexity_df <- dplyr::bind_rows(convexity_features)
 
   # assemble the full ordered feature frame without depending on dplyr's global variable semantics
   feature_frame <- data.frame(
@@ -305,7 +306,7 @@ extract_geometric_features <- function(buildings_sf,
     bbox_area = bbox_df$bbox_area,
     elongation = bbox_df$elongation,
     rectangularity = bbox_df$rectangularity,
-    aspect_ratio = bbox_df$bbox_height / bbox_df$bbox_width,
+    aspect_ratio = bbox_df$aspect_ratio,
     has_hole = has_hole,
     num_holes = num_holes,
     num_vertices = num_vertices,
@@ -320,7 +321,7 @@ extract_geometric_features <- function(buildings_sf,
     stringsAsFactors = FALSE
   )
 
-  feature_frame$orientation_degrees <- vapply(geom_list, geomorphr_orientation, numeric(1))
+  feature_frame$orientation_degrees <- bbox_df$orientation_degrees
   if (!is.null(orientation_col)) {
     feature_frame$orientation_degrees <- as.numeric(buildings_sf[[orientation_col]]) %% 180
   }

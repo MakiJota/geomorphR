@@ -1,7 +1,7 @@
 Package: geomorphR
 Type: Package
 Title: Geometric Features and Footprint Comparison for 'sf' Objects
-Version: 0.2.0
+Version: 0.2.1
 Authors@R: person("Jonathan", "Cohen", email = "cohen.jota@gmail.com", role = c("aut", "cre"))
 Author: Jonathan Cohen [aut, cre]
 Maintainer: Jonathan Cohen <cohen.jota@gmail.com>

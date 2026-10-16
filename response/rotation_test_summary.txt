@@ -1,0 +1,18 @@
+Rotation invariance test
+Input: C:\Users\edgardo\Documents\GitHub\geomorphR\inst\extdata\central_gbg.geojson
+Footprints: 246
+Full turn: 360 degrees in 2-degree steps; 180 frames (360 degrees is the starting frame)
+Loop seam: 358 to 0 degrees (one normal 2-degree step; no duplicate endpoint)
+Fixed framing: square extent of +/- 703 map units around rotation center
+
+Spearman rank correlation against the 0-degree measurements at 30 degrees:
+  Previous axis-aligned elongation: 0.3128
+  Patched elongation:              1.0000
+  Previous axis-aligned rectangularity: 0.5283
+  Patched rectangularity:              1.0000
+
+Median rectangularity across the full rotation:
+  Previous axis-aligned: 0.4628 to 0.7206
+  Patched:               0.7998 to 0.7998
+
+This is a local equivalent of the reported rotation test, not a reproduction of the Belgrade/Dorcol result: the package's bundled sample has 246 features, rather than the report's 2,005 Dorcol buildings.
